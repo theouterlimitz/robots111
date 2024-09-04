@@ -316,6 +316,8 @@ def update_object_graph(object_id, gemini_response):
                                   state=...,  # Add the object's state
                                   label=gemini_response.label, 
                                   description=gemini_response.description,
+                                  functionality=gemini_response.functionality,
+                                  affordances=gemini_response.affordances,
                                   gemini_confidence=gemini_response.confidence,
                                   explored=False) 
     else:
