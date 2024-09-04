@@ -1,3 +1,5 @@
+#This code defines a Google Cloud Function named prune_graph. Its primary goal is to maintain the efficiency and relevance of the object graph that your robot is building and using for navigation and decision-making.
+
 from google.cloud import storage
 from datetime import datetime, timedelta
 import networkx as nx
