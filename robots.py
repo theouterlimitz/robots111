@@ -13,6 +13,8 @@ from sensor_msgs.msg import LaserScan
 import google.cloud.pubsub_v1 as pubsub
 import json
 from google.cloud import aiplatform
+from datetime import datetime, timedelta
+from google.cloud import storage
 
 # Object Detection Model (e.g., YOLO)
 object_detector = cv2.dnn.readNetFromDarknet("yolov3.cfg", "yolov3.weights")
@@ -93,11 +95,21 @@ class ObjectBehaviorLearner:
 
     def update_graph(self, object_id, state, predicted_state, alpha=0.5):
         """Updates the object graph with new information."""
+        now = datetime.utcnow()  # Get current time 
         if object_id not in self.object_graph.nodes:
-            self.object_graph.add_node(object_id, state=state, explored=False)  # Add 'explored' attribute
+            self.object_graph.add_node(object_id, 
+                                      state=state,  # Add the object's state
+                                      label=None, 
+                                      description=None,
+                                      functionality=None,
+                                      affordances=None,
+                                      gemini_confidence=None,
+                                      explored=False,
+                                      timestamp=now.isoformat()) 
         else:
             self.object_graph.nodes[object_id]['state'] = state
             self.object_graph.nodes[object_id]['explored'] = True
+            self.object_graph.nodes[object_id]['timestamp'] = now.isoformat() # Update timestamp
 
         # Calculate velocity difference
         velocity_diff = predicted_state[2:] - state[2:]
@@ -243,6 +255,15 @@ try:
 except:
     pass
 
+# Function to Save Graph to Cloud Storage
+def save_graph_to_cloud_storage(graph, bucket_name, blob_name):
+    """Saves the object graph to Google Cloud Storage."""
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    graph_data = nx.node_link_data(graph)
+    blob.upload_from_string(json.dumps(graph_data))
+    print(f"Graph data saved to gs://{bucket_name}/{blob_name}")
 
 # Robot Loop
 def robot_loop():
@@ -281,49 +302,33 @@ def robot_loop():
         detections = object_detector.detect(frame)
 
         # Kalman Filtering
-      
-trackers = {}
-      for detection in detections:
-          object_id = detection.id 
-      
-          # 1. Check for Unexplored or Low-Confidence Objects:
-          if object_is_unexplored(object_id) or object_confidence_is_low(object_id):
-              # Capture image of the object
-              image = capture_object_image(object_id)
-      
-              # Query Gemini for object identification and description
-              gemini_response = query_gemini(image, "What is this object? Describe it.")
-      
-              # 2. Update Object Graph with Gemini Response:
-              update_object_graph(object_id, gemini_response) 
-      
-              # 3. Decide Exploration Based on Gemini Response:
-              if should_explore_object(object_id, gemini_response): 
-                  explore_object(object_id)
-      
-          # 4. Kalman Filtering (for ALL objects, even if explored):
-          if object_id not in trackers:
-              trackers[object_id] = KalmanTracker(detection.state) 
-          predicted_state = trackers[object_id].predict()
-          updated_state = trackers[object_id].update(detection.state)
-      
-          # 5. Update the graph with alpha (for ALL objects):
-          learner.update_graph(object_id, updated_state, predicted_state, alpha=0.5) 
-      
-def update_object_graph(object_id, gemini_response):
-    if object_id not in self.object_graph.nodes:
-        self.object_graph.add_node(object_id, 
-                                  state=...,  # Add the object's state
-                                  label=gemini_response.label, 
-                                  description=gemini_response.description,
-                                  functionality=gemini_response.functionality,
-                                  affordances=gemini_response.affordances,
-                                  gemini_confidence=gemini_response.confidence,
-                                  explored=False) 
-    else:
-        # Update existing node attributes (need)
-        # ...
+        trackers = {}
+        for detection in detections:
+            object_id = detection.id 
 
+            # 1. Check for Unexplored or Low-Confidence Objects:
+            if object_is_unexplored(object_id) or object_confidence_is_low(object_id):
+                # Capture image of the object
+                image = capture_object_image(object_id)
+
+                # Query Gemini for object identification and description
+                gemini_response = query_gemini(image, "What is this object? Describe it.")
+
+                # 2. Update Object Graph with Gemini Response:
+                learner.update_object_graph(object_id, gemini_response) 
+
+                # 3. Decide Exploration Based on Gemini Response:
+                if should_explore_object(object_id, gemini_response): 
+                    explore_object(object_id)
+
+            # 4. Kalman Filtering (for ALL objects, even if explored):
+            if object_id not in trackers:
+                trackers[object_id] = KalmanTracker(detection.state) 
+            predicted_state = trackers[object_id].predict()
+            updated_state = trackers[object_id].update(detection.state)
+
+            # 5. Update the graph with alpha (for ALL objects):
+            learner.update_graph(object_id, updated_state, predicted_state, alpha=0.5) 
 
         # Create Graph for GNN
         graph = Data(
@@ -374,4 +379,25 @@ def update_object_graph(object_id, gemini_response):
             # Execute the path
             execute_path(smoothed_path)
 
-            # Train the Combiner (online training, can be reduced or skipped if pre-
+        # Periodically Save Graph Data to Cloud Storage
+        if frame_count % 100 == 0:  # Save every 100 frames (adjust as needed)
+            save_graph_to_cloud_storage(learner.object_graph, 'your-bucket-name', 'graph_data.json')
+
+        # ... (Visualization, etc.)
+
+# Placeholder functions for environment and robot state
+def get_environment_info():
+    # Implement logic to capture environment information
+    # Example: Read sensor data, process camera images, etc.
+    return np.array([0.0, 0.0, 0.0])  # Replace with actual environment data
+
+def get_robot_state():
+    # Implement logic to get robot state information
+    # Example: Read robot position, orientation, velocity, etc.
+    return np.array([0.0, 0.0, 0.0])  # Replace with actual robot state data
+
+# ... (Other placeholder functions for object detection, Gemini, exploration, etc.)
+
+# Initialize and Run the Robot Loop
+capture = cv2.VideoCapture(0)  # Open camera (or your video source)
+robot_loop()
