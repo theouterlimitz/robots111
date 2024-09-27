@@ -20,22 +20,23 @@ from google.cloud import storage
 object_detector = cv2.dnn.readNetFromDarknet("yolov3.cfg", "yolov3.weights")
 
 # Kalman Filter for Each Object
+# Kalman Filter 
 class KalmanTracker:
     def __init__(self, initial_state):
-        # Initialize Kalman filter parameters (state, covariance, etc.)
-        self.filter = cv2.KalmanFilter(4, 2)  # Example: 4 states (x, y, vx, vy), 2 measurements (x, y)
-        self.filter.statePre = initial_state
-        # ... initialize other filter parameters
+        self.filter = cv2.KalmanFilter(4, 2) 
+        self.filter.measurementMatrix = np.array([[1, 0, 0, 0], [0, 1, 0, 0]], np.float32) 
+        self.filter.transitionMatrix = np.array([[1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0], [0, 0, 0, 1]], np.float32) 
+        self.filter.processNoiseCov = np.eye(4, dtype=np.float32) * 0.03 
+        self.filter.measurementNoiseCov = np.eye(2, dtype=np.float32) * 0.1
+        self.filter.statePost = initial_state
 
     def predict(self):
-        """Predicts the next state."""
         predicted_state = self.filter.predict()
         return predicted_state
 
     def update(self, measurement):
-        """Updates the state based on a new measurement."""
-        self.filter.correct(measurement)  # Correct the state based on the measurement
-        return self.filter.statePost  # Updated state
+        self.filter.correct(measurement)
+        return self.filter.statePost
 
 # Transformer Block
 class TransformerBlock(tf.keras.layers.Layer):
