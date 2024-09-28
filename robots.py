@@ -19,7 +19,6 @@ from google.cloud import storage
 # Object Detection Model (e.g., YOLO)
 object_detector = cv2.dnn.readNetFromDarknet("yolov3.cfg", "yolov3.weights")
 
-# Kalman Filter for Each Object
 # Kalman Filter 
 class KalmanTracker:
     def __init__(self, initial_state):
