@@ -25,7 +25,7 @@ class KalmanTracker:
         self.filter = cv2.KalmanFilter(5, 2)  # 5 state variables, 2 measurement variables
         self.filter.measurementMatrix = np.array([[1, 0, 0, 0], [0, 1, 0, 0]], np.float32) 
         self.filter.transitionMatrix = np.array([[1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0], [0, 0, 0, 1]], np.float32) 
-        self.filter.processNoiseCov = np.eye(4, dtype=np.float32) * 0.03 
+        self.filter.processNoiseCov = np.eye(5, dtype=np.float32) * 0.03 
         self.filter.measurementNoiseCov = np.eye(2, dtype=np.float32) * 0.1
         self.filter.statePost = initial_state
 
