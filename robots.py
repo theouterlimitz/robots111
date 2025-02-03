@@ -19,13 +19,22 @@ from google.cloud import storage
 # Object Detection Model (e.g., YOLO)
 object_detector = cv2.dnn.readNetFromDarknet("yolov3.cfg", "yolov3.weights")
 
-# Kalman Filter 
+# Kalman Filter (Updated for 5 state variables)
 class KalmanTracker:
     def __init__(self, initial_state):
-        self.filter = cv2.KalmanFilter(5, 2)  # 5 state variables, 2 measurement variables
-        self.filter.measurementMatrix = np.array([[1, 0, 0, 0], [0, 1, 0, 0]], np.float32) 
-        self.filter.transitionMatrix = np.array([[1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0], [0, 0, 0, 1]], np.float32) 
-        self.filter.processNoiseCov = np.eye(5, dtype=np.float32) * 0.03 
+        self.filter = cv2.KalmanFilter(5, 2)  # 5 state variables
+        self.filter.measurementMatrix = np.array([
+         ,
+           
+        ], np.float32)
+        self.filter.transitionMatrix = np.array([
+         ,
+         ,
+         ,
+         ,
+           
+        ], np.float32)
+        self.filter.processNoiseCov = np.eye(5, dtype=np.float32) * 0.03  # Adjust as needed
         self.filter.measurementNoiseCov = np.eye(2, dtype=np.float32) * 0.1
         self.filter.statePost = initial_state
 
@@ -36,7 +45,7 @@ class KalmanTracker:
     def update(self, measurement):
         self.filter.correct(measurement)
         return self.filter.statePost
-
+        
 # Transformer Block
 class TransformerBlock(tf.keras.layers.Layer):
     def __init__(self, d_model, num_heads, dff, rate=0.1):
