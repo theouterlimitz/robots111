@@ -22,7 +22,7 @@ object_detector = cv2.dnn.readNetFromDarknet("yolov3.cfg", "yolov3.weights")
 # Kalman Filter 
 class KalmanTracker:
     def __init__(self, initial_state):
-        self.filter = cv2.KalmanFilter(4, 2) 
+        self.filter = cv2.KalmanFilter(5, 2)  # 5 state variables, 2 measurement variables
         self.filter.measurementMatrix = np.array([[1, 0, 0, 0], [0, 1, 0, 0]], np.float32) 
         self.filter.transitionMatrix = np.array([[1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0], [0, 0, 0, 1]], np.float32) 
         self.filter.processNoiseCov = np.eye(4, dtype=np.float32) * 0.03 
