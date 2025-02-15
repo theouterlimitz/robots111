@@ -1,10 +1,14 @@
+import os
+import json
+import re
+import networkx as nx
+import google.generativeai
 import numpy as np
 import cv2
 import tensorflow as tf
 import tensorflow_federated as tff
 from tensorflow.keras.layers import LSTM, Dense, Input, TimeDistributed, Attention, Concatenate, Flatten, Reshape, RepeatVector, MultiHeadAttention, LayerNormalization, Dropout
 from tensorflow.keras.models import Model
-import networkx as nx
 import torch
 import torch_geometric
 from torch_geometric.data import Data
@@ -12,10 +16,12 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 import google.cloud.pubsub_v1 as pubsub
-import json
 from google.cloud import aiplatform
 from datetime import datetime, timedelta
 from google.cloud import storage
+
+# Set your Gemini API key (this is essential)
+google.generativeai.configure(api_key="YOUR_API_KEY")
 
 # Object Detection Model (e.g., YOLO)
 object_detector = cv2.dnn.readNetFromDarknet("yolov3.cfg", "yolov3.weights")
@@ -275,6 +281,189 @@ def save_graph_to_cloud_storage(graph, bucket_name, blob_name):
     blob.upload_from_string(json.dumps(graph_data))
     print(f"Graph data saved to gs://{bucket_name}/{blob_name}")
 
+
+class RobotNavigator:
+    def __init__(self, object_learner=None, gnn_model=None, combiner=None):
+        self.object_learner = object_learner
+        self.gnn_model = gnn_model
+        self.combiner = combiner
+        self.object_graph = nx.Graph()
+        self.robot_state = None
+        self.environment_info = None
+        self.gemini_model = google.generativeai.GenerativeModel('gemini-pro')
+
+    def get_gemini_navigation_instructions(self, user_command):
+        prompt = f"""
+        Given my current location and the following environment information:
+
+        Environment Info: {self.format_environment_info()}
+
+        Object Graph: {nx.node_link_data(self.object_graph)}
+
+        Robot State: {self.robot_state}
+
+        How do I get to {user_command}? Provide a sequence of high-level actions or instructions.  Be specific about object interactions if needed.  Return the instructions in a structured JSON format if possible, like this:
+
+        ```json
+        [
+          {{"action": "go_to", "target": "kitchen"}},
+          {{"action": "pick_up", "target": "apple"}},
+          {{"action": "go_to", "target": "living_room"}}
+        ]
+        ```
+        """
+
+        try:
+            response = self.gemini_model.generate_text(prompt)
+            navigation_instructions_text = response.result
+            return navigation_instructions_text
+        except Exception as e:
+            print(f"Error calling Gemini API: {e}")
+            return None
+
+    def format_environment_info(self):
+        if self.environment_info is None:
+            return "No environment information available."
+        formatted_info = ""
+        for item in self.environment_info:  # Example, adapt to your data structure
+            formatted_info += f"{item}\n"  # Example
+        return formatted_info
+
+    def parse_gemini_instructions(self, instructions_text):
+        if not instructions_text:
+            return None
+
+        try:  # Attempt to parse JSON first
+            instructions_json = json.loads(instructions_text)
+            actions = [instr["action"] for instr in instructions_json]
+            targets = [instr.get("target", None) for instr in instructions_json]
+            return list(zip(actions, targets))  # Combine actions and targets
+
+        except json.JSONDecodeError:  # If JSON parsing fails, use regex (less reliable)
+            print("Gemini response not in JSON format. Using regex parsing (less reliable).")
+            #... (Your regex parsing logic from before - less reliable)
+            return None  # Or return the regex-parsed actions if you implement that
+
+    def map_actions_to_robot_commands(self, actions_and_targets):
+        robot_commands =
+        if actions_and_targets is None:
+            return None
+
+        for action, target in actions_and_targets:
+            if action == "go_to":
+                location = target
+                waypoints = self.plan_path_to(location)
+                if waypoints:
+                    for waypoint in waypoints:
+                        robot_commands.append(("move_to", waypoint))
+                else:
+                    print(f"Path planning failed for {location}")
+            elif action == "pick_up":
+                object_name = target
+                robot_commands.append(("pick_up", object_name))  # Replace with your logic
+            #... other action mappings
+        return robot_commands
+
+    def plan_path_to(self, location):
+        #... (Your path planning implementation)
+        print(f"Planning path to {location}...")  # Replace with your actual path planning.
+        return [(1, 2), (3, 4), (5, 6)]  # Example waypoints.
+
+    def execute_commands(self, commands):
+        #... (Your robot control implementation)
+        for command, args in commands:
+            if command == "move_to":
+                waypoint = args
+                # Send motor commands to move the robot to the waypoint.
+                print(f"Moving to waypoint: {waypoint}")  # Replace with your robot control code.
+            elif command == "pick_up":
+                object_name = args
+                # Send commands to grasp the specified object
+                print(f"Picking up: {object_name}")  # Replace with your robot control code.
+            #... other command executions
+
+    def update_robot_state(self, new_state):
+        self.robot_state = new_state
+
+    def update_environment_info(self, new_info):
+        self.environment_info = new_info
+
+    def run_navigation(self, user_command):
+        instructions_text = self.get_gemini_navigation_instructions(user_command)
+        if instructions_text:
+            actions_and_targets = self.parse_gemini_instructions(instructions_text)
+            if actions_and_targets:
+                commands = self.map_actions_to_robot_commands(actions_and_targets)
+                if commands:
+                    self.execute_commands(commands)
+                else:
+                    print("Action mapping failed.")
+            else:
+                print("Could not parse Gemini instructions.")
+        else:
+            print("Could not get navigation instructions.")
+
+
+# Robot Loop 
+def robot_loop():
+
+    navigator = RobotNavigator(learner, gnn_model, combiner)  # Create navigator instance
+
+    #... (Your ROS node initialization)
+
+    robot_id = 'robot_1'
+    frame_count = 0
+
+    while True:
+        #... (Your existing object detection, Kalman filtering, graph updates,
+        #      GNN training, RNN prediction, etc.)
+
+        # Combine predictions and get waypoints (same as before)
+
+        # Gemini Integration (NEW):
+        user_command = get_user_command()  # Implement this
+        if user_command:
+            # Update context *before* calling Gemini
+            navigator.update_robot_state(get_robot_state())
+            navigator.update_environment_info(get_environment_info())
+            navigator.run_navigation(user_command)
+        else:
+            # If no user command, continue with existing waypoint following
+            if waypoints is not None:  # Check if waypoints are available
+                smoothed_path = smooth_path(waypoints)
+                execute_path(smoothed_path)
+            else:
+                print("No waypoints available. Waiting for user command or waypoints."
+
+
+# Placeholder functions (implement these)
+                      def get_user_command():
+    #... (Your implementation for getting user command)
+    return None  # Replace with your speech recognition or other input method.
+
+def get_robot_state():
+    #... (Your implementation for getting robot state)
+    return np.array() # Placeholder
+
+def get_environment_info():
+    #... (Your implementation for getting environment info)
+    return np.array() # Placeholder
+
+        #... (Your existing graph saving and visualization)
+
+
+# Placeholder functions (implement these)
+def get_user_command():
+    """Gets user command (speech or text)."""
+    # Example (text input):
+    # return input("Enter navigation command: ")
+    return None # Replace with your speech recognition or other input method.
+
+def get_robot_state():
+    #... (Your existing logic to get robot state)
+
+def get_environment_info():
+    #... (Your existing logic to get environment info)
 # Robot Loop
 def robot_loop():
     learner = ObjectBehaviorLearner(state_dimension=4)  # Initialize the learner with a graph
@@ -395,8 +584,7 @@ def robot_loop():
 
         # ... (Visualization, etc.)
 
-# Placeholder functions for environment and robot state
-def get_environment_info():
+# Placeholder functions for environment and robot statedef get_environment_info():
     # Implement logic to capture environment information
     # Example: Read sensor data, process camera images, etc.
     return np.array([0.0, 0.0, 0.0])  # Replace with actual environment data
